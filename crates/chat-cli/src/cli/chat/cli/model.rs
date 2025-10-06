@@ -35,6 +35,12 @@ pub struct ModelInfo {
     /// Size of the model's context window, in tokens
     #[serde(default = "default_context_window")]
     pub context_window_tokens: usize,
+    /// Rate multiplier for pricing (e.g., 1.5 means 1.5x the base rate)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_multiplier: Option<f64>,
+    /// Unit for the rate multiplier (e.g., "tokens")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_unit: Option<String>,
 }
 
 impl ModelInfo {
@@ -48,6 +54,8 @@ impl ModelInfo {
             description: model.description.clone(),
             model_name: model.model_name().map(|s| s.to_string()),
             context_window_tokens,
+            rate_multiplier: model.rate_multiplier(),
+            rate_unit: model.rate_unit().map(|s| s.to_string()),
         }
     }
 
@@ -58,11 +66,24 @@ impl ModelInfo {
             description: None,
             model_name: None,
             context_window_tokens: 200_000,
+            rate_multiplier: None,
+            rate_unit: None,
         }
     }
 
     pub fn display_name(&self) -> &str {
         self.model_name.as_deref().unwrap_or(&self.model_id)
+    }
+
+    pub fn display_name_with_pricing(&self) -> String {
+        let base_name = self.display_name();
+        if let Some(rate) = self.rate_multiplier {
+            // Only show pricing if rate is greater than 1.0
+            if rate > 1.0 {
+                return format!("{} (pricing: {}x)", base_name, rate);
+            }
+        }
+        base_name.to_string()
     }
 
     pub fn description(&self) -> Option<&str> {
@@ -105,7 +126,7 @@ pub async fn select_model(os: &Os, session: &mut ChatSession) -> Result<Option<C
     let labels: Vec<String> = models
         .iter()
         .map(|model| {
-            let display_name = model.display_name();
+            let display_name = model.display_name_with_pricing();
             let description = model.description();
             if Some(model.model_id.as_str()) == active_model_id {
                 if let Some(desc) = description {
@@ -214,12 +235,16 @@ fn get_fallback_models() -> Vec<ModelInfo> {
             model_id: "claude-sonnet-4".to_string(),
             description: None,
             context_window_tokens: 200_000,
+            rate_multiplier: None,
+            rate_unit: None,
         },
         ModelInfo {
             model_name: Some("claude-3.7-sonnet".to_string()),
             model_id: "claude-3.7-sonnet".to_string(),
             description: None,
             context_window_tokens: 200_000,
+            rate_multiplier: None,
+            rate_unit: None,
         },
     ]
 }
