@@ -446,6 +446,8 @@ mod tests {
                 description: None,
                 model_name: Some("Claude".to_string()),
                 context_window_tokens: 200_000,
+                rate_multiplier: None,
+                rate_unit: None,
             })),
             150_000
         );
@@ -455,6 +457,8 @@ mod tests {
                 description: None,
                 model_name: Some("GPT".to_string()),
                 context_window_tokens: 128_000,
+                rate_multiplier: None,
+                rate_unit: None,
             })),
             96_000
         );

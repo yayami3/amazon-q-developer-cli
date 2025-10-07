@@ -266,3 +266,53 @@ pub fn find_model<'a>(models: &'a [ModelInfo], name: &str) -> Option<&'a ModelIn
             || m.model_id.eq_ignore_ascii_case(normalized)
     })
 }
+
+#[cfg(test)]
+mod pricing_tests {
+    use super::*;
+
+    #[test]
+    fn test_display_name_with_pricing() {
+        // Test case 1: Model with pricing > 1.0 should show pricing
+        let model_with_pricing = ModelInfo {
+            model_name: Some("claude-sonnet-4.5".to_string()),
+            description: Some("High-performance model".to_string()),
+            model_id: "claude-sonnet-4.5".to_string(),
+            context_window_tokens: 200_000,
+            rate_multiplier: Some(1.5),
+            rate_unit: Some("tokens".to_string()),
+        };
+        assert_eq!(
+            model_with_pricing.display_name_with_pricing(),
+            "claude-sonnet-4.5 (pricing: 1.5x)"
+        );
+
+        // Test case 2: Model with standard pricing (1.0) should not show pricing
+        let model_standard = ModelInfo {
+            model_name: Some("claude-sonnet-4".to_string()),
+            description: Some("Standard model".to_string()),
+            model_id: "claude-sonnet-4".to_string(),
+            context_window_tokens: 200_000,
+            rate_multiplier: Some(1.0),
+            rate_unit: Some("tokens".to_string()),
+        };
+        assert_eq!(
+            model_standard.display_name_with_pricing(),
+            "claude-sonnet-4"
+        );
+
+        // Test case 3: Model with no pricing info should not show pricing
+        let model_no_pricing = ModelInfo {
+            model_name: Some("claude-3.7-sonnet".to_string()),
+            description: Some("Previous generation".to_string()),
+            model_id: "claude-3.7-sonnet".to_string(),
+            context_window_tokens: 200_000,
+            rate_multiplier: None,
+            rate_unit: None,
+        };
+        assert_eq!(
+            model_no_pricing.display_name_with_pricing(),
+            "claude-3.7-sonnet"
+        );
+    }
+}
