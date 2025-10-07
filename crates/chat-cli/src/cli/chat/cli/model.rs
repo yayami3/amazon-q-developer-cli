@@ -75,17 +75,6 @@ impl ModelInfo {
         self.model_name.as_deref().unwrap_or(&self.model_id)
     }
 
-    pub fn display_name_with_pricing(&self) -> String {
-        let base_name = self.display_name();
-        if let Some(rate) = self.rate_multiplier {
-            // Only show pricing if rate is greater than 1.0
-            if rate > 1.0 {
-                return format!("{} (pricing: {}x)", base_name, rate);
-            }
-        }
-        base_name.to_string()
-    }
-
     pub fn description(&self) -> Option<&str> {
         self.description
             .as_deref()
@@ -126,18 +115,32 @@ pub async fn select_model(os: &Os, session: &mut ChatSession) -> Result<Option<C
     let labels: Vec<String> = models
         .iter()
         .map(|model| {
-            let display_name = model.display_name_with_pricing();
-            let description = model.description();
-            if Some(model.model_id.as_str()) == active_model_id {
-                if let Some(desc) = description {
-                    format!("{} (active) | {}", display_name, desc)
-                } else {
-                    format!("{} (active)", display_name)
-                }
-            } else if let Some(desc) = description {
-                format!("{} | {}", display_name, desc)
+            let display_name = model.display_name();
+            let is_active = Some(model.model_id.as_str()) == active_model_id;
+            
+            // Build display name with active status
+            let name_with_status = if is_active {
+                format!("{} (active)", display_name)
             } else {
                 display_name.to_string()
+            };
+            
+            // Build description with pricing info
+            let description_with_pricing = match (model.description(), model.rate_multiplier) {
+                (Some(desc), Some(rate)) if rate > 1.0 => {
+                    format!("{}x pricing | {}", rate, desc)
+                },
+                (Some(desc), _) => desc.to_string(),
+                (None, Some(rate)) if rate > 1.0 => {
+                    format!("{}x pricing", rate)
+                },
+                _ => String::new(),
+            };
+            
+            if !description_with_pricing.is_empty() {
+                format!("{} | {}", name_with_status, description_with_pricing)
+            } else {
+                name_with_status
             }
         })
         .collect();
@@ -272,8 +275,8 @@ mod pricing_tests {
     use super::*;
 
     #[test]
-    fn test_display_name_with_pricing() {
-        // Test case 1: Model with pricing > 1.0 should show pricing
+    fn test_pricing_display_in_description() {
+        // Test case 1: Model with pricing > 1.0 and description
         let model_with_pricing = ModelInfo {
             model_name: Some("claude-sonnet-4.5".to_string()),
             description: Some("High-performance model".to_string()),
@@ -282,12 +285,12 @@ mod pricing_tests {
             rate_multiplier: Some(1.5),
             rate_unit: Some("tokens".to_string()),
         };
-        assert_eq!(
-            model_with_pricing.display_name_with_pricing(),
-            "claude-sonnet-4.5 (pricing: 1.5x)"
-        );
+        
+        // Pricing should be prepended to description
+        assert_eq!(model_with_pricing.rate_multiplier, Some(1.5));
+        assert_eq!(model_with_pricing.description(), Some("High-performance model"));
 
-        // Test case 2: Model with standard pricing (1.0) should not show pricing
+        // Test case 2: Model with standard pricing (1.0) should not affect display
         let model_standard = ModelInfo {
             model_name: Some("claude-sonnet-4".to_string()),
             description: Some("Standard model".to_string()),
@@ -296,12 +299,11 @@ mod pricing_tests {
             rate_multiplier: Some(1.0),
             rate_unit: Some("tokens".to_string()),
         };
-        assert_eq!(
-            model_standard.display_name_with_pricing(),
-            "claude-sonnet-4"
-        );
+        
+        assert_eq!(model_standard.rate_multiplier, Some(1.0));
+        assert_eq!(model_standard.description(), Some("Standard model"));
 
-        // Test case 3: Model with no pricing info should not show pricing
+        // Test case 3: Model with no pricing info
         let model_no_pricing = ModelInfo {
             model_name: Some("claude-3.7-sonnet".to_string()),
             description: Some("Previous generation".to_string()),
@@ -310,9 +312,8 @@ mod pricing_tests {
             rate_multiplier: None,
             rate_unit: None,
         };
-        assert_eq!(
-            model_no_pricing.display_name_with_pricing(),
-            "claude-3.7-sonnet"
-        );
+        
+        assert_eq!(model_no_pricing.rate_multiplier, None);
+        assert_eq!(model_no_pricing.description(), Some("Previous generation"));
     }
 }
