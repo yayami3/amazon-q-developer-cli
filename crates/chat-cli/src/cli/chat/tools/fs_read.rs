@@ -459,43 +459,55 @@ impl FsLine {
     }
 
     pub async fn queue_description(&self, os: &Os, updates: &mut impl Write) -> Result<()> {
-        let path = sanitize_path_tool_arg(os, &self.path);
-        let file_bytes = os.fs.read(&path).await?;
-        let file_content = String::from_utf8_lossy(&file_bytes);
-        let line_count = file_content.lines().count();
         queue!(
             updates,
             style::Print("Reading file: "),
             StyledText::success_fg(),
             style::Print(&self.path),
             StyledText::reset(),
-            style::Print(", "),
         )?;
 
-        let start = convert_negative_index(line_count, self.start_line()) + 1;
-        let end = convert_negative_index(line_count, self.end_line()) + 1;
-        match (start, end) {
-            _ if start == 1 && end == line_count => Ok(queue!(updates, style::Print("all lines".to_string()))?),
-            _ if end == line_count => Ok(queue!(
-                updates,
-                style::Print("from line "),
-                StyledText::success_fg(),
-                style::Print(start),
-                StyledText::reset(),
-                style::Print(" to end of file"),
-            )?),
-            _ => Ok(queue!(
-                updates,
-                style::Print("from line "),
-                StyledText::success_fg(),
-                style::Print(start),
-                StyledText::reset(),
-                style::Print(" to "),
-                StyledText::success_fg(),
-                style::Print(end),
-                StyledText::reset(),
-            )?),
+        // Try to show line range details, but don't fail if we can't read the file
+        let path = sanitize_path_tool_arg(os, &self.path);
+        match os.fs.read(&path).await {
+            Ok(file_bytes) => {
+                let file_content = String::from_utf8_lossy(&file_bytes);
+                let line_count = file_content.lines().count();
+                
+                queue!(updates, style::Print(", "))?;
+                
+                let start = convert_negative_index(line_count, self.start_line()) + 1;
+                let end = convert_negative_index(line_count, self.end_line()) + 1;
+                match (start, end) {
+                    _ if start == 1 && end == line_count => queue!(updates, style::Print("all lines".to_string()))?,
+                    _ if end == line_count => queue!(
+                        updates,
+                        style::Print("from line "),
+                        StyledText::success_fg(),
+                        style::Print(start),
+                        StyledText::reset(),
+                        style::Print(" to end of file"),
+                    )?,
+                    _ => queue!(
+                        updates,
+                        style::Print("from line "),
+                        StyledText::success_fg(),
+                        style::Print(start),
+                        StyledText::reset(),
+                        style::Print(" to "),
+                        StyledText::success_fg(),
+                        style::Print(end),
+                        StyledText::reset(),
+                    )?,
+                }
+            },
+            Err(_) => {
+                // File read failed, but still show the filename
+                // Don't propagate the error - just show basic info
+            }
         }
+        
+        Ok(())
     }
 
     pub async fn invoke(&self, os: &Os, updates: &mut impl Write) -> Result<InvokeOutput> {
